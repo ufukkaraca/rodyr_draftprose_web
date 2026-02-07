@@ -62,6 +62,19 @@ interface ProjectState {
   // Snapshot Actions
   addSnapshot: (nodeId: string, label: string) => Promise<void>;
   loadSnapshots: (nodeId: string) => Promise<void>;
+
+  // Writing Targets (DP-6)
+  targets: {
+      projectGoal: number; // e.g. 50000
+      sessionGoal: number; // e.g. 1000
+      sessionDate: string; // ISO Date "YYYY-MM-DD" for reset
+  };
+  stats: {
+      wordCount: number; // Total Project Words
+      sessionCount: number; // Session Words
+  };
+  updateTargets: (targets: { projectGoal?: number; sessionGoal?: number }) => void;
+  updateStats: (wordCount: number) => void; // Called by calculating total words
 }
 
 // Debounce map to track pending saves per document
@@ -105,8 +118,58 @@ export const useProjectStore = create<ProjectState>()(
       isLoading: true, // Start loading
       saveStatus: 'idle',
 
+      // Targets Initial State
+      targets: {
+          projectGoal: 50000,
+          sessionGoal: 1000,
+          sessionDate: new Date().toISOString().split('T')[0]
+      },
+      stats: {
+          wordCount: 0,
+          sessionCount: 0
+      },
+
       setActiveNode: (id) => set({ activeNodeId: id }),
       setViewMode: (mode) => set({ viewMode: mode }),
+
+      updateTargets: (newTargets) => set((state) => ({
+          targets: { ...state.targets, ...newTargets }
+      })),
+
+      updateStats: (totalWords) => set((state) => {
+          const today = new Date().toISOString().split('T')[0];
+          const isNewSession = state.targets.sessionDate !== today;
+          
+          let newSessionCount = state.stats.sessionCount;
+          
+          if (isNewSession) {
+              // Reset session count if new day
+              newSessionCount = 0;
+          } else {
+             // Calculate delta if mostly appending? 
+             // Actually, simplest is to track "start of session total" vs "current total"?
+             // But we don't have "start of session total".
+             // Let's just approximate: if totalWords increases, increase sessionCount?
+             // Better: we need to track delta. 
+             // IF totalWords > state.stats.wordCount -> diff = total - state.stats.wordCount
+             // sessionCount += diff
+             const diff = totalWords - state.stats.wordCount;
+             if (diff > 0) {
+                 newSessionCount += diff;
+             }
+          }
+
+          return {
+              stats: {
+                  wordCount: totalWords,
+                  sessionCount: newSessionCount
+              },
+              targets: {
+                  ...state.targets,
+                  sessionDate: today
+              }
+          };
+      }),
 
       loadProject: async (projectId: string) => {
           set({ isLoading: true });

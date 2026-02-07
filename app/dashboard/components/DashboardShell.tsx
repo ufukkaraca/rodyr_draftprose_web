@@ -14,7 +14,9 @@ import { Binder } from "./Binder"
 import { Inspector } from "./Inspector"
 import { Button } from "@/components/ui/button"
 import { PanelLeft, PanelRight, GripVerticalIcon, LayoutGrid, FileText, Download } from "lucide-react"
-import { CompilerDialog } from "./compiler/CompilerDialog"
+import { CompileDialog } from "./compiler/CompileDialog"
+import { TargetDialog } from "./TargetDialog"
+import { TargetProgress } from "./TargetProgress"
 import { cn } from "@/lib/utils"
 
 export function DashboardShell({
@@ -32,14 +34,33 @@ export function DashboardShell({
 
   const [isRightCollapsed, setIsRightCollapsed] = React.useState(false)
   const [isCompilerOpen, setIsCompilerOpen] = React.useState(false)
+  const [isTargetDialogOpen, setIsTargetDialogOpen] = React.useState(false)
   
-  const { loadProject, nodes, addNode, isLoading, saveStatus, content } = useProjectStore()
+  const { loadProject, nodes, addNode, isLoading, saveStatus, content, updateStats } = useProjectStore()
   const hasSeeded = React.useRef(false)
 
   // Load Request
   React.useEffect(() => {
       loadProject("demo-project")
   }, [loadProject])
+
+  // Calculate Total Word Count
+  React.useEffect(() => {
+    if (isLoading) return;
+    
+    // Quick calculate total words
+    let total = 0;
+    Object.values(content).forEach(html => {
+        // Strip HTML tags for word count
+        const text = html.replace(/<[^>]*>/g, ' ');
+        // Count words
+        const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+        total += words;
+    });
+
+    updateStats(total);
+
+  }, [content, isLoading, updateStats]);
 
   // Auto-Seed Demo Data if Empty
   React.useEffect(() => {
@@ -103,6 +124,7 @@ export function DashboardShell({
 
   return (
     <div className="h-screen w-full bg-background overflow-hidden relative font-sans">
+        {/* @ts-ignore */}
         <ResizablePanelGroup direction="horizontal" className="h-full items-stretch">
             {/* Left Sidebar: Binder */}
             <ResizablePanel 
@@ -163,6 +185,32 @@ export function DashboardShell({
                                     {saveStatus === 'idle' ? 'Synced' : saveStatus}
                                 </span>
                            </div>
+                         </div>
+                         
+                        {/* Target Progress */}
+                        <div className="pointer-events-auto px-2">
+                             <TargetProgress 
+                                onClick={() => setIsTargetDialogOpen(true)} 
+                             />
+                        </div>
+
+                        {/* Backup Button */}
+                        <div className="pointer-events-auto px-2">
+                           <Button 
+                               variant="ghost" 
+                               size="icon" 
+                               className="h-8 w-8 text-muted-foreground/50 hover:text-foreground"
+                               onClick={() => {
+                                   const projectId = "demo-project"; 
+                                   window.open(`/api/projects/${projectId}/backup`, '_blank');
+                               }}
+                               title="Download Project Backup"
+                           >
+                               <div className="relative">
+                                   <Cloud className="h-4 w-4" />
+                                   <span className="absolute -bottom-1 -right-1 text-[8px] font-bold bg-background rounded-full px-0.5 border border-border">↓</span>
+                               </div>
+                           </Button>
                         </div>
 
                          {/* Compiler Button */}
@@ -258,7 +306,8 @@ export function DashboardShell({
 
         </ResizablePanelGroup>
         
-        <CompilerDialog open={isCompilerOpen} onOpenChange={setIsCompilerOpen} />
+        <CompileDialog open={isCompilerOpen} onOpenChange={setIsCompilerOpen} />
+        <TargetDialog open={isTargetDialogOpen} onOpenChange={setIsTargetDialogOpen} />
     </div>
   )
 }
