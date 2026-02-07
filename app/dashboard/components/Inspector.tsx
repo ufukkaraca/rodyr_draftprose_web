@@ -25,6 +25,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { FileText, Tag, Image as ImageIcon, Sparkles, BookOpen, Clock, Camera, RotateCcw } from "lucide-react"
 import { useProjectStore, BinderNode, Snapshot, NodeStatus, NodeLabel } from "@/app/dashboard/store/useProjectStore"
+import { MuseChat } from "./MuseChat"
 
 export function Inspector() {
   const activeNodeId = useProjectStore((state) => state.activeNodeId)
@@ -40,6 +41,7 @@ export function Inspector() {
   const [previewSnapshot, setPreviewSnapshot] = useState<Snapshot | null>(null)
   
   const loadSnapshots = useProjectStore((state) => state.loadSnapshots)
+  const [activeTab, setActiveTab] = useState("general")
 
   React.useEffect(() => {
       if (activeNodeId) {
@@ -75,6 +77,8 @@ export function Inspector() {
       )
   }
 
+
+
   return (
     <div className="flex flex-col h-full bg-sidebar border-l border-sidebar-border min-w-0">
       {/* Inspector Header */}
@@ -82,13 +86,15 @@ export function Inspector() {
         <span className="font-mono text-xs font-bold uppercase tracking-wider text-sidebar-foreground/70">Inspector</span>
       </div>
 
-      <Tabs defaultValue="general" className="flex-1 flex flex-col min-h-0">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
         <div className="px-4 py-2 border-b border-sidebar-border bg-sidebar shrink-0">
-             <TabsList className="w-full grid grid-cols-4 h-8 gap-1">
+             <TabsList className="w-full grid grid-cols-5 h-8 gap-1">
                <TabsTrigger value="general" className="text-[10px] px-1">Meta</TabsTrigger>
                <TabsTrigger value="synopsis" className="text-[10px] px-1">Sync</TabsTrigger>
                <TabsTrigger value="notes" className="text-[10px] px-1">Notes</TabsTrigger>
                <TabsTrigger value="snapshots" className="text-[10px] px-1">Snaps</TabsTrigger>
+               <TabsTrigger value="muse" className="text-[10px] px-1 text-purple-600 data-[state=active]:text-purple-700">Muse</TabsTrigger>
+
              </TabsList>
         </div>
 
@@ -259,6 +265,11 @@ export function Inspector() {
                </Dialog>
            </TabsContent>
         </ScrollArea>
+        
+        {/* Tab: Muse Chat (Outside ScrollArea for full height) */}
+        <TabsContent value="muse" className="m-0 flex-1 flex flex-col min-h-0 data-[state=inactive]:hidden">
+            <MuseChat />
+        </TabsContent>
       </Tabs>
       
       {/* Footer / AI Status */}

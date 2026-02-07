@@ -1,63 +1,113 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 30;
+// Use the new SDK
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+});
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
-    const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const { messages, context, activeNodeTitle, projectTitle, persona } = await req.json();
 
-    if (!apiKey) {
-        return NextResponse.json({ error: "Missing API Key" }, { status: 500 });
+    const lastMessage = messages[messages.length - 1];
+    
+    // Construct System Prompt
+    let systemInstruction = `
+You are Muse, an intelligent writing assistant for the creative writing tool "DraftProse".
+Your goal is to help the author write better, brainstorm ideas, and maintain continuity.
+
+Context:
+- Project: "${projectTitle}"
+- Current Document: "${activeNodeTitle}"
+- Content provided below:
+---
+${context}
+---
+
+Instructions:
+- Be concise and helpful.
+- Adopt a supportive, creative partner persona.
+`;
+
+    if (persona && persona.id !== 'muse') {
+         systemInstruction = `
+You are a character in the story named "${persona.name}".
+You are being interviewed by the author.
+Stay in character. Use your voice, tone, and knowledge based on your description.
+
+Character Description:
+${persona.content}
+
+Context:
+- Project: "${projectTitle}"
+- Current Document: "${activeNodeTitle}"
+`;
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        systemInstruction: "You are Muse, a creative writing assistant for Wryter. You help authors with plotting, character development, and research. Be concise, encouraging, and creative."
-    });
-
-    // Transform messages to Gemini format
-    // Note: Gemini expects 'user' and 'model' roles. 'system' is separate.
-    // If previous messages exist, we need to format them correctly for history.
-    // However, simplest way for single-turn or simple multi-turn is to feed history if possible
-    // or just the last prompt if we use generateContent directly.
-    // For ChatSession we need proper history.
+    // Format for @google/genai
+    // It seems to take 'contents' array with 'role' and 'parts'.
+    // User -> 'user', Model -> 'model'
     
-    const history = messages.slice(0, -1).map((m: any) => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }]
-    }));
+    // We'll prepend system instruction to the inputs or config if supported.
+    // The snippet used 'thinkingConfig', but that might be specific to 3-flash.
+    // Let's stick to standard content generation first.
+    
+    // Construct the full prompt sequence including system instruction as first user message?
+    // Or use systemInstruction config if available in v1beta/new SDK.
+    // The snippet didn't show system instruction, just user role.
+    
+    // Let's prepend the system instruction to the last message or as a separate user message at the start.
+    // Gemini usually handles system instructions better if we can pass it in config, but for now prepending is safer if unsure of SDK surface.
+    
+    const contents = [
+        {
+            role: 'user',
+            parts: [{ text: `System Instruction: ${systemInstruction}` }]
+        },
+        {
+            role: 'model',
+            parts: [{ text: "Understood." }]
+        },
+        ...messages.slice(0, -1).map((m: any) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.content }]
+        })),
+        {
+            role: 'user',
+            parts: [{ text: lastMessage.content }]
+        }
+    ];
 
-    const lastMessage = messages[messages.length - 1].content;
-
-    const chat = model.startChat({
-        history: history,
+    const result = await ai.models.generateContentStream({
+      model: 'gemini-3-flash-preview',
+      contents: contents,
+      config: {
+        // thinkingConfig: { thinkingLevel: 'HIGH' } // Optional based on user snippet
+      }
     });
 
-    const result = await chat.sendMessageStream(lastMessage);
-
-    // Create a stream
     const stream = new ReadableStream({
         async start(controller) {
-            for await (const chunk of result.stream) {
-                const chunkText = chunk.text();
-                controller.enqueue(new TextEncoder().encode(chunkText));
+            for await (const chunk of result) {
+                const text = chunk.text;
+                if (text) {
+                    controller.enqueue(new TextEncoder().encode(text));
+                }
             }
             controller.close();
         }
     });
 
-    return new NextResponse(stream, {
+    return new Response(stream, {
         headers: {
             "Content-Type": "text/plain; charset=utf-8",
         },
     });
 
   } catch (error) {
-    console.error("Error in chat route:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error("[CHAT_ERROR]", error);
+    return new NextResponse("Internal Error", { status: 500 });
   }
 }
