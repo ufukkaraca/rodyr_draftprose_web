@@ -14,6 +14,7 @@ export async function POST(req: Request) {
       create: {
         email: "demo@example.com",
         name: "Demo User",
+        emailVerified: true,
       }
     })
 

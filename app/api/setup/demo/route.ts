@@ -11,7 +11,8 @@ export async function POST() {
       create: {
         email: "demo@draftprose.com",
         name: "Demo Writer",
-        image: "" // Optional
+        image: "", // Optional
+        emailVerified: true,
       }
     })
 
@@ -44,5 +45,17 @@ export async function POST() {
   } catch (error) {
     console.error("[SETUP_DEMO]", error)
     return new NextResponse("Internal Error: " + (error as Error).message, { status: 500 })
+  }
+}
+
+export async function DELETE() {
+  try {
+    await prisma.user.delete({
+      where: { email: "demo@draftprose.com" }
+    })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+     // Ignore if not found
+     return NextResponse.json({ success: true, note: "User mismatch or already deleted" })
   }
 }

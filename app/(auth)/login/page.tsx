@@ -65,6 +65,94 @@ export default function LoginPage() {
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Sign In
           </Button>
+          <Button 
+            className="w-full" 
+            variant="outline" 
+            onClick={async () => {
+              const demoCreds = {
+                email: "demo@draftprose.com",
+                password: "password123",
+                name: "Demo Writer"
+              };
+              
+              setLoading(true);
+              setEmail(demoCreds.email);
+              setPassword(demoCreds.password);
+
+              try {
+                // 1. Try Sign In
+                await authClient.signIn.email({
+                    email: demoCreds.email,
+                    password: demoCreds.password,
+                }, {
+                    onSuccess: () => router.push("/dashboard"),
+                    onError: async (ctx) => {
+                        // 2. If User Not Found, Try Register
+                        if (ctx.error.status === 401 || ctx.error.status === 404 || ctx.error.message?.includes("record not found") || ctx.error.message?.includes("Invalid email or password")) {
+                            const tryRegister = async () => {
+                                await authClient.signUp.email({
+                                    email: demoCreds.email,
+                                    password: demoCreds.password,
+                                    name: demoCreds.name,
+                                }, {
+                                    onSuccess: async () => {
+                                        // 3. Seed Data
+                                        try {
+                                            await fetch("/api/setup/demo", { method: "POST" });
+                                            router.push("/dashboard");
+                                        } catch (e) {
+                                            console.error("Seeding failed", e);
+                                            router.push("/dashboard");
+                                        }
+                                    },
+                                    onError: async (e) => {
+                                        // 4. If Register Failed (likely user exists but password mismatch from bad seed), Reset & Retry
+                                        if (e.error.status === 422 || e.error.message?.includes("exists")) {
+                                            try {
+                                                await fetch("/api/setup/demo", { method: "DELETE" });
+                                                // Retry register once, purely recursive or just call it? 
+                                                // Let's just call the logic again manually to avoid infinite loop risk, just one level deep
+                                                 await authClient.signUp.email({
+                                                    email: demoCreds.email,
+                                                    password: demoCreds.password,
+                                                    name: demoCreds.name,
+                                                }, {
+                                                    onSuccess: async () => {
+                                                        await fetch("/api/setup/demo", { method: "POST" });
+                                                        router.push("/dashboard");
+                                                    },
+                                                    onError: (finalErr) => {
+                                                         setLoading(false);
+                                                         alert("Demo recovery failed: " + finalErr.error.message);
+                                                    }
+                                                });
+                                            } catch (resetErr) {
+                                                setLoading(false);
+                                                alert("Could not reset demo account.");
+                                            }
+                                        } else {
+                                            setLoading(false);
+                                            alert("Demo setup failed: " + e.error.message);
+                                        }
+                                    }
+                                });
+                            };
+                            await tryRegister();
+                        } else {
+                            setLoading(false);
+                            alert(ctx.error.message);
+                        }
+                    }
+                });
+              } catch (err) {
+                  setLoading(false);
+                  console.error(err);
+              }
+            }}
+            disabled={loading}
+          >
+            Enter Demo Mode
+          </Button>
           <div className="text-sm text-center text-muted-foreground">
             Don't have an account? <Link href="/register" className="text-primary hover:underline">Sign up</Link>
           </div>

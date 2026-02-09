@@ -112,31 +112,45 @@ export function DashboardShell({
   }, [session, isSessionPending, loadProject, projectId])
 
   const toggleLeft = () => {
+    console.log("Toggle Left Clicked. Ref:", leftPanelRef.current);
     if (isCompact) {
         setIsLeftSheetOpen(!isLeftSheetOpen)
     } else {
         const panel = leftPanelRef.current
         if (panel) {
-          if (isLeftCollapsed) {
-            panel.expand()
+          const size = panel.getSize()
+          console.log("Left Panel Size:", size);
+          if (size.asPercentage < 5) {
+            console.log("Expanding Left (Force Resize 20)...");
+            panel.resize(20)
           } else {
+            console.log("Collapsing Left...");
             panel.collapse()
           }
+        } else {
+            console.error("Left Panel Ref is null");
         }
     }
   }
 
   const toggleRight = () => {
+    console.log("Toggle Right Clicked. Ref:", rightPanelRef.current);
     if (isCompact) {
         setIsRightSheetOpen(!isRightSheetOpen)
     } else {
         const panel = rightPanelRef.current
         if (panel) {
-          if (isRightCollapsed) {
-              panel.expand()
+          const size = panel.getSize()
+          console.log("Right Panel Size:", size);
+          if (size.asPercentage < 5) {
+              console.log("Expanding Right (Force Resize 20)...");
+              panel.resize(20)
           } else {
+              console.log("Collapsing Right...");
               panel.collapse()
           }
+        } else {
+            console.error("Right Panel Ref is null");
         }
     }
   }
@@ -300,7 +314,7 @@ export function DashboardShell({
 
   const MainContent = (
       <div className="h-full flex flex-col relative bg-background w-full">
-           <HeaderContent />
+           {HeaderContent()}
            
            <div className="flex-1 overflow-hidden pt-14 data-[focus=true]:pt-0 transition-all duration-500">
                {isLoading ? (
@@ -359,7 +373,7 @@ export function DashboardShell({
                             }
                         }}
                         className={cn(
-                            "transition-[width] duration-300 ease-in-out data-[panel-group-direction=vertical]:h-full overflow-hidden",
+                            "data-[panel-group-direction=vertical]:h-full overflow-hidden",
                             isLeftCollapsed && "min-w-0" 
                         )}
                     >
@@ -410,7 +424,7 @@ export function DashboardShell({
                             }
                         }}
                         className={cn(
-                            "transition-[width] duration-300 ease-in-out data-[panel-group-direction=vertical]:h-full overflow-hidden",
+                            "data-[panel-group-direction=vertical]:h-full overflow-hidden",
                             isRightCollapsed && "min-w-0"
                         )}
                     >
