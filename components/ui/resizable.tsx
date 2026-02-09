@@ -6,11 +6,13 @@ import * as ResizablePrimitive from "react-resizable-panels"
 
 import { cn } from "@/lib/utils"
 
-const ResizablePanelGroup = ({
-  className,
-  ...props
-}: React.ComponentProps<typeof ResizablePrimitive.Group>) => (
+const ResizablePanelGroup = React.forwardRef<
+  any, // ImperativePanelGroupHandle not exported in this version?
+  React.ComponentProps<typeof ResizablePrimitive.Group>
+>(({ className, ...props }, ref) => (
   <ResizablePrimitive.Group
+    // @ts-ignore
+    ref={ref}
     data-slot="resizable-panel-group"
     className={cn(
       "flex h-full w-full aria-[orientation=vertical]:flex-col",
@@ -18,7 +20,8 @@ const ResizablePanelGroup = ({
     )}
     {...props}
   />
-)
+))
+ResizablePanelGroup.displayName = "ResizablePanelGroup"
 
 const ResizablePanel = React.forwardRef<
   ImperativePanelHandle,

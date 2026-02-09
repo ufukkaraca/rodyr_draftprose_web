@@ -111,46 +111,77 @@ export function DashboardShell({
       }
   }, [session, isSessionPending, loadProject, projectId])
 
+  const groupRef = React.useRef<any>(null)
+
   const toggleLeft = () => {
-    console.log("Toggle Left Clicked. Ref:", leftPanelRef.current);
+    const group = groupRef.current;
+    const leftPanel = leftPanelRef.current; // Keep ref for checking collapsed state if needed
+    
     if (isCompact) {
         setIsLeftSheetOpen(!isLeftSheetOpen)
-    } else {
-        const panel = leftPanelRef.current
-        if (panel) {
-          const size = panel.getSize()
-          console.log("Left Panel Size:", size);
-          if (size.asPercentage < 5) {
-            console.log("Expanding Left (Force Resize 20)...");
-            panel.resize(20)
-          } else {
-            console.log("Collapsing Left...");
-            panel.collapse()
-          }
+        return;
+    }
+
+    if (group) {
+        const layout = group.getLayout();
+        // Layout is array of percentages e.g. [20, 60, 20] or [0, 80, 20]
+        // If left is collapsed (size ~0), expand it.
+        // We rely on isLeftCollapsed state or check layout[0]
+        
+        const isLeftClosed = layout[0] < 5;
+        const isRightClosed = layout[2] < 5;
+        
+        if (isLeftClosed) {
+            // Expand Left
+            // Target: Left=20.
+            // If Right is Closed: Left=20, Center=80, Right=0
+            // If Right is Open: Left=20, Center=60, Right=20
+            if (isRightClosed) {
+                group.setLayout([20, 80, 0]);
+            } else {
+                group.setLayout([20, 60, 20]);
+            }
         } else {
-            console.error("Left Panel Ref is null");
+            // Collapse Left
+            // Target: Left=0.
+            // If Right is Closed: Left=0, Center=100, Right=0
+            // If Right is Open: Left=0, Center=80, Right=20
+            if (isRightClosed) {
+                group.setLayout([0, 100, 0]);
+            } else {
+                 group.setLayout([0, 80, 20]);
+            }
         }
     }
   }
 
   const toggleRight = () => {
-    console.log("Toggle Right Clicked. Ref:", rightPanelRef.current);
+    const group = groupRef.current;
+    
     if (isCompact) {
         setIsRightSheetOpen(!isRightSheetOpen)
-    } else {
-        const panel = rightPanelRef.current
-        if (panel) {
-          const size = panel.getSize()
-          console.log("Right Panel Size:", size);
-          if (size.asPercentage < 5) {
-              console.log("Expanding Right (Force Resize 20)...");
-              panel.resize(20)
-          } else {
-              console.log("Collapsing Right...");
-              panel.collapse()
-          }
+        return;
+    }
+    
+    if (group) {
+        const layout = group.getLayout();
+        const isLeftClosed = layout[0] < 5;
+        const isRightClosed = layout[2] < 5; // index 2 is Right (0=Left, 1=Center, 2=Right)
+
+        if (isRightClosed) {
+            // Expand Right
+            if (isLeftClosed) {
+                group.setLayout([0, 80, 20]);
+            } else {
+                group.setLayout([20, 60, 20]);
+            }
         } else {
-            console.error("Right Panel Ref is null");
+             // Collapse Right
+             if (isLeftClosed) {
+                 group.setLayout([0, 100, 0]);
+             } else {
+                 group.setLayout([20, 80, 0]);
+             }
         }
     }
   }
@@ -355,7 +386,7 @@ export function DashboardShell({
         ) : (
             // DESKTOP MODE (Resizable Panels)
             // @ts-ignore
-            <ResizablePanelGroup direction="horizontal" className="h-full items-stretch">
+            <ResizablePanelGroup ref={groupRef} direction="horizontal" className="h-full items-stretch">
                 {/* Left Sidebar: Binder */}
                 {!focusMode && (
                     <>
