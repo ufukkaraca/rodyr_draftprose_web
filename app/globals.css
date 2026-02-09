@@ -148,3 +148,14 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .proactive-warning {
+    text-decoration: underline wavy orange;
+    text-underline-offset: 4px;
+    cursor: help;
+  }
+  .proactive-warning[data-severity="error"] {
+    text-decoration-color: red;
+  }
+}

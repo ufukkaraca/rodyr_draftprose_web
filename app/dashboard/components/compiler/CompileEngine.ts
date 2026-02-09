@@ -13,8 +13,11 @@ export function getFlatCompilationList(
     nodes: Record<string, BinderNode>, 
     selectedIds: Set<string>
 ): BinderNode[] {
+    const normalize = (pid: string | null | undefined) => (!pid || pid === 'root') ? null : pid;
+
     const rootNodes = Object.values(nodes)
-        .filter(n => n.parentId === null || n.parentId === 'root')
+        .filter(n => normalize(n.parentId) === null)
+        .filter(n => n.label !== 'research' && !n.id.startsWith('research-')) // Exclude Research Root
         .sort((a, b) => a.order - b.order);
 
     const flatList: BinderNode[] = [];
@@ -26,7 +29,7 @@ export function getFlatCompilationList(
 
         // Find children
         const children = Object.values(nodes)
-            .filter(n => n.parentId === node.id)
+            .filter(n => normalize(n.parentId) === node.id)
             .sort((a, b) => a.order - b.order);
         
         children.forEach(traverse);
@@ -55,8 +58,10 @@ export async function compileProject(
     separators: CompileSeparatorsConfig,
     exportType: string
 ) {
+    console.log("Starting Compilation...", { format, separators, exportType });
     const { nodes, content } = useProjectStore.getState();
     const compileList = getFlatCompilationList(nodes, selectedIds);
+    console.log("Compile List Size:", compileList.length);
     const title = "Generated Manuscript"; 
 
     // --- DOCX EXPORT ---

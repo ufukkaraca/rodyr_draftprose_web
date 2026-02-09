@@ -14,6 +14,7 @@ import { compileProject } from "./CompileEngine";
 import { cn } from "@/lib/utils";
 
 export function CompileDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  console.log("CompileDialog Rendered. Open:", open);
   const { nodes } = useProjectStore();
   
   // State: Tab Selection (Replacing Tabs component for stability)

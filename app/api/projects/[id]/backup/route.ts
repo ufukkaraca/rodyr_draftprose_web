@@ -53,6 +53,11 @@ label: ${node.metadata?.label || 'none'}
   }
 }
 
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
+
+// ... imports remain the same
+
 export async function GET(
   req: Request,
   props: { params: Promise<{ id: string }> }
@@ -61,6 +66,14 @@ export async function GET(
     const params = await props.params;
     const { id } = params;
 
+    const session = await auth.api.getSession({
+        headers: await headers()
+    });
+
+    if (!session) {
+        return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     if (!id) {
       return new NextResponse("Project ID required", { status: 400 });
     }
@@ -68,6 +81,10 @@ export async function GET(
     // 1. Fetch Data
     const project = await prisma.project.findUnique({ where: { id } });
     if (!project) return new NextResponse("Project not found", { status: 404 });
+
+    if (project.userId !== session.user.id) {
+        return new NextResponse("Forbidden", { status: 403 });
+    }
 
     const documents = await prisma.document.findMany({
       where: { projectId: id },

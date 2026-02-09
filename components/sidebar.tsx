@@ -1,7 +1,7 @@
 
 "use client"
 import Link from "next/link"
-import { User } from "next-auth"
+import { User } from "better-auth/types"
 import { Button } from "@/components/ui/button"
 import { 
     BookOpen, 

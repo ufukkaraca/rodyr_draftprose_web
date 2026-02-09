@@ -10,6 +10,8 @@ export type NodeType = 'folder' | 'file';
 export type NodeStatus = 'draft' | 'revised' | 'done' | 'outline' | 'note';
 export type NodeLabel = 'chapter' | 'scene' | 'idea' | 'research' | 'character' | 'location';
 
+const PROJECT_STORE_VERSION = '1.0.1-trash-debug';
+
 export interface BinderNode {
   id: string;
   title: string;
@@ -35,10 +37,18 @@ interface ProjectState {
   nodes: Record<string, BinderNode>;
   content: Record<string, string>;
   snapshots: Record<string, Snapshot[]>;
+  projectId: string | null;
   
   // UI State (Persisted Locally)
   activeNodeId: string | null;
   viewMode: 'editor' | 'corkboard';
+  focusMode: boolean;
+  activeInspectorTab: string;
+  
+  // Split View State (DP-Editor)
+  splitMode: 'none' | 'vertical' | 'horizontal';
+  secondaryNodeId: string | null;
+  activePane: 'primary' | 'secondary';
 
   // Async State
   isLoading: boolean;
@@ -47,7 +57,13 @@ interface ProjectState {
   // Actions
   setActiveNode: (id: string | null) => void;
   setViewMode: (mode: 'editor' | 'corkboard') => void;
+  toggleFocusMode: () => void;
+  setActiveInspectorTab: (tab: string) => void;
   
+  setSplitMode: (mode: 'none' | 'vertical' | 'horizontal') => void;
+  setSecondaryNodeId: (id: string | null) => void;
+  setActivePane: (pane: 'primary' | 'secondary') => void;
+
   loadProject: (projectId: string) => Promise<void>;
   
   // CRUD Actions (Optimistic + API)
@@ -58,6 +74,8 @@ interface ProjectState {
   // High-level Actions
   moveNode: (id: string, newParentId: string | null, newIndex: number) => void;
   deleteNode: (id: string) => void;
+  emptyTrash: () => Promise<void>;
+  restoreNode: (id: string) => void;
   
   // Snapshot Actions
   addSnapshot: (nodeId: string, label: string) => Promise<void>;
@@ -113,6 +131,7 @@ export const useProjectStore = create<ProjectState>()(
       nodes: {},
       content: {},
       snapshots: {},
+      projectId: null as string | null, // Added
       activeNodeId: null,
       viewMode: 'editor',
       isLoading: true, // Start loading
@@ -129,8 +148,31 @@ export const useProjectStore = create<ProjectState>()(
           sessionCount: 0
       },
 
-      setActiveNode: (id) => set({ activeNodeId: id }),
+
       setViewMode: (mode) => set({ viewMode: mode }),
+      
+      focusMode: false,
+      toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
+
+      activeInspectorTab: 'synopsis',
+      setActiveInspectorTab: (tab) => set({ activeInspectorTab: tab }),
+
+      // Split View Implementation
+      splitMode: 'none',
+      secondaryNodeId: null,
+      activePane: 'primary',
+      
+      setSplitMode: (mode) => set({ splitMode: mode }),
+      setSecondaryNodeId: (id) => set({ secondaryNodeId: id }),
+      setActivePane: (pane) => set({ activePane: pane }),
+
+      // Modified setActiveNode to handle Split View context
+      setActiveNode: (id) => set((state) => {
+          if (state.splitMode !== 'none' && state.activePane === 'secondary') {
+              return { secondaryNodeId: id };
+          }
+          return { activeNodeId: id };
+      }),
 
       updateTargets: (newTargets) => set((state) => ({
           targets: { ...state.targets, ...newTargets }
@@ -146,13 +188,6 @@ export const useProjectStore = create<ProjectState>()(
               // Reset session count if new day
               newSessionCount = 0;
           } else {
-             // Calculate delta if mostly appending? 
-             // Actually, simplest is to track "start of session total" vs "current total"?
-             // But we don't have "start of session total".
-             // Let's just approximate: if totalWords increases, increase sessionCount?
-             // Better: we need to track delta. 
-             // IF totalWords > state.stats.wordCount -> diff = total - state.stats.wordCount
-             // sessionCount += diff
              const diff = totalWords - state.stats.wordCount;
              if (diff > 0) {
                  newSessionCount += diff;
@@ -171,10 +206,11 @@ export const useProjectStore = create<ProjectState>()(
           };
       }),
 
-      loadProject: async (projectId: string) => {
-          set({ isLoading: true });
+      loadProject: async (id) => {
+          console.log(`[Store] Loading Project ${id} (v${PROJECT_STORE_VERSION})`);
+          set({ isLoading: true, projectId: id }); // Set Project ID
           try {
-              const res = await fetch(`/api/projects/${projectId}/tree`);
+              const res = await fetch(`/api/projects/${id}/tree`);
               if (!res.ok) throw new Error("Failed to load project");
               const docs = await res.json();
               
@@ -198,6 +234,32 @@ export const useProjectStore = create<ProjectState>()(
                   content[doc.id] = doc.content || '';
               });
               
+              // Ensure Research Folder Exists
+              const researchId = `research-${id}`;
+              if (!nodes[researchId]) {
+                  const researchNode: BinderNode = {
+                      id: researchId,
+                      title: "Research",
+                      type: "folder",
+                      parentId: null,
+                      order: 998,
+                      status: "done",
+                      label: "research",
+                      synopsis: "Project research and reference materials.",
+                      notes: "",
+                      collapsed: false
+                  };
+                  nodes[researchId] = researchNode;
+                  
+                  // Persist to backend
+                  fetch('/api/documents', {
+                      method: 'POST',
+                      body: JSON.stringify({ ...researchNode, projectId: id, metadata: {
+                          system: 'research', label: 'research'
+                      }})
+                  }).catch(e => console.error("Failed to create Research folder", e));
+              }
+
               set({ nodes, content, isLoading: false });
           } catch (error) {
               console.error(error);
@@ -339,11 +401,100 @@ export const useProjectStore = create<ProjectState>()(
       },
       
       deleteNode: async (id) => {
+          const state = get();
+          const node = state.nodes[id];
+          if (!node) return;
+
+          // Determine Trash ID
+          // Robustly find the trash folder in existing nodes
+          const trashNode = Object.values(state.nodes).find(n => n.id === 'trash' || n.id === `trash-${state.projectId}` || (n as any).metadata?.system === 'trash');
+          const trashId = trashNode ? trashNode.id : `trash-${state.projectId}`;
+
+          console.log('[Store] deleteNode', { id, trashId, nodeParent: node.parentId });
+
+          const isLegacyTrash = id === 'trash';
+          const isScopedTrash = id === `trash-${state.projectId}`;
+          const isResearch = id === `research-${state.projectId}`;
+          
+          // 1. If it's the Trash or Research folder, deny
+          if (isLegacyTrash || isScopedTrash || isResearch || (node as any).metadata?.system === 'trash') return;
+
+          // 2. Check if already in trash
+          // Simplified: If parentId looks like trash, treat as trash for deletion purposes
+          const isTrash = node.parentId && (node.parentId === 'trash' || node.parentId.startsWith('trash-'));
+          
+          console.log('[Store] isTrash?', isTrash);
+
+          if (isTrash) {
+              console.log('[Store] Hard Deleting', id);
+              // Hard Delete
+              set((state) => {
+                  const { [id]: deleted, ...remaining } = state.nodes;
+                  return { nodes: remaining };
+              });
+              await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+          } else {
+              console.log('[Store] Soft Deleting (Moving to Trash)', id);
+              // Soft Delete (Move to Trash)
+              // We move to the resolved trashId
+              set((state) => {
+                 return {
+                     nodes: {
+                         ...state.nodes,
+                         [id]: { ...node, parentId: trashId }
+                     },
+                     saveStatus: 'saving'
+                 };
+              });
+              triggerSave(id, { parentId: trashId });
+          }
+      },
+      
+      emptyTrash: async () => {
+          const state = get();
+          
+          // Find the trash node ID
+          const trashNode = Object.values(state.nodes).find(n => n.id === 'trash' || n.id === `trash-${state.projectId}` || (n as any).metadata?.system === 'trash');
+          const trashId = trashNode ? trashNode.id : `trash-${state.projectId}`;
+
+          console.log('[Store] emptyTrash', { trashId });
+
+          // Find children of THIS trash folder
+          const trashChildren = Object.values(state.nodes).filter(n => n.parentId === trashId);
+          
+          console.log('[Store] trashChildren count', trashChildren.length);
+
+          // Optimistic
           set((state) => {
-              const { [id]: deleted, ...remaining } = state.nodes;
-              return { nodes: remaining };
+              const newNodes = { ...state.nodes };
+              trashChildren.forEach(child => {
+                  delete newNodes[child.id];
+              });
+              return { nodes: newNodes };
           });
-          await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+          
+          // API
+          for (const child of trashChildren) {
+               await fetch(`/api/documents/${child.id}`, { method: 'DELETE' });
+          }
+      },
+
+      restoreNode: async (id) => {
+        const node = get().nodes[id];
+        if (!node) return;
+        
+        // Restore to root (null), top order (0)
+        set((state) => {
+            return {
+                nodes: {
+                    ...state.nodes,
+                    [id]: { ...node, parentId: null, order: 0 } 
+                },
+                saveStatus: 'saving'
+            };
+        });
+        // We reuse logic similar to moveNode/triggerSave
+        triggerSave(id, { parentId: null, order: 0 });
       }
 
     }),
@@ -352,7 +503,9 @@ export const useProjectStore = create<ProjectState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
           activeNodeId: state.activeNodeId, 
-          viewMode: state.viewMode
+          viewMode: state.viewMode,
+          focusMode: state.focusMode,
+          activeInspectorTab: state.activeInspectorTab
       }),
     }
   )

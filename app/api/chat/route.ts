@@ -1,6 +1,7 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { headers } from "next/headers";
 
 // Use the new SDK
 const ai = new GoogleGenAI({
@@ -9,6 +10,14 @@ const ai = new GoogleGenAI({
 
 export async function POST(req: Request) {
   try {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    });
+
+    if (!session) {
+        return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const { messages, context, activeNodeTitle, projectTitle, persona } = await req.json();
 
     const lastMessage = messages[messages.length - 1];

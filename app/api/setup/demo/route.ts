@@ -26,6 +26,20 @@ export async function POST() {
         }
     })
 
+    // 3. Upsert Trash Folder
+    await prisma.document.upsert({
+        where: { id: "trash-demo-project" },
+        update: {},
+        create: {
+            id: "trash-demo-project",
+            title: "Trash",
+            type: "folder",
+            projectId: project.id,
+            metadata: { system: "trash", collapsed: true },
+            order: 9999 // Pin to bottom
+        }
+    })
+
     return NextResponse.json({ user, project })
   } catch (error) {
     console.error("[SETUP_DEMO]", error)

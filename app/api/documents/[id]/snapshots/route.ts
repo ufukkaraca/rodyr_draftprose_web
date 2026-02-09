@@ -1,6 +1,16 @@
-
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
+import { headers } from "next/headers"
+
+// Reuse/duplicate verification helper (simplest to avoid creating shared util right now, though not DRY)
+async function verifyDocumentAccess(documentId: string, userId: string): Promise<boolean> {
+    const doc = await prisma.document.findUnique({
+        where: { id: documentId },
+        select: { project: { select: { userId: true } } }
+    });
+    return doc?.project.userId === userId;
+}
 
 export async function GET(
   req: Request,
@@ -8,6 +18,12 @@ export async function GET(
 ) {
   const params = await props.params;
   try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) return new NextResponse("Unauthorized", { status: 401 });
+
+    const hasAccess = await verifyDocumentAccess(params.id, session.user.id);
+    if (!hasAccess) return new NextResponse("Forbidden", { status: 403 });
+
     const snapshots = await prisma.snapshot.findMany({
       where: {
         documentId: params.id
@@ -30,6 +46,12 @@ export async function POST(
 ) {
   const params = await props.params;
   try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) return new NextResponse("Unauthorized", { status: 401 });
+
+    const hasAccess = await verifyDocumentAccess(params.id, session.user.id);
+    if (!hasAccess) return new NextResponse("Forbidden", { status: 403 });
+
     const body = await req.json()
     const { label, content } = body
 
