@@ -90,7 +90,7 @@ Context:
     ];
 
     const result = await ai.models.generateContentStream({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       contents: contents,
       config: {
         // thinkingConfig: { thinkingLevel: 'HIGH' } // Optional based on user snippet

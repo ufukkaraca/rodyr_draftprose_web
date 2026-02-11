@@ -3,7 +3,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || "");
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,14 +17,14 @@ export async function POST(req: NextRequest) {
 
     const { text, context } = await req.json();
 
-    if (!process.env.GOOGLE_API_KEY) {
+    if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return NextResponse.json(
         { error: "Missing API Key" },
         { status: 500 }
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
     You are an expert literary editor. Analyze the following text snippet (and context if provided) and provide structured insights.

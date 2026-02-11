@@ -111,77 +111,38 @@ export function DashboardShell({
       }
   }, [session, isSessionPending, loadProject, projectId])
 
-  const groupRef = React.useRef<any>(null)
+
 
   const toggleLeft = () => {
-    const group = groupRef.current;
-    const leftPanel = leftPanelRef.current; // Keep ref for checking collapsed state if needed
-    
     if (isCompact) {
         setIsLeftSheetOpen(!isLeftSheetOpen)
         return;
     }
 
-    if (group) {
-        const layout = group.getLayout();
-        // Layout is array of percentages e.g. [20, 60, 20] or [0, 80, 20]
-        // If left is collapsed (size ~0), expand it.
-        // We rely on isLeftCollapsed state or check layout[0]
-        
-        const isLeftClosed = layout[0] < 5;
-        const isRightClosed = layout[2] < 5;
-        
-        if (isLeftClosed) {
-            // Expand Left
-            // Target: Left=20.
-            // If Right is Closed: Left=20, Center=80, Right=0
-            // If Right is Open: Left=20, Center=60, Right=20
-            if (isRightClosed) {
-                group.setLayout([20, 80, 0]);
-            } else {
-                group.setLayout([20, 60, 20]);
-            }
+    const panel = leftPanelRef.current;
+    if (panel) {
+        const collapsed = panel.isCollapsed();
+        if (collapsed) {
+            panel.expand();
         } else {
-            // Collapse Left
-            // Target: Left=0.
-            // If Right is Closed: Left=0, Center=100, Right=0
-            // If Right is Open: Left=0, Center=80, Right=20
-            if (isRightClosed) {
-                group.setLayout([0, 100, 0]);
-            } else {
-                 group.setLayout([0, 80, 20]);
-            }
+            panel.collapse();
         }
     }
   }
 
   const toggleRight = () => {
-    const group = groupRef.current;
-    
     if (isCompact) {
         setIsRightSheetOpen(!isRightSheetOpen)
         return;
     }
     
-    if (group) {
-        const layout = group.getLayout();
-        const isLeftClosed = layout[0] < 5;
-        const isRightClosed = layout[2] < 5; // index 2 is Right (0=Left, 1=Center, 2=Right)
-
-        if (isRightClosed) {
-            // Expand Right
-            if (isLeftClosed) {
-                group.setLayout([0, 80, 20]);
-            } else {
-                group.setLayout([20, 60, 20]);
-            }
+    const panel = rightPanelRef.current;
+    if (panel) {
+        const collapsed = panel.isCollapsed();
+        if (collapsed) {
+            panel.expand();
         } else {
-             // Collapse Right
-             if (isLeftClosed) {
-                 group.setLayout([0, 100, 0]);
-             } else {
-                 group.setLayout([20, 80, 0]);
-             }
+            panel.collapse();
         }
     }
   }
@@ -385,16 +346,15 @@ export function DashboardShell({
             </div>
         ) : (
             // DESKTOP MODE (Resizable Panels)
-            // @ts-ignore
-            <ResizablePanelGroup ref={groupRef} direction="horizontal" className="h-full items-stretch">
+            <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch">
                 {/* Left Sidebar: Binder */}
                 {!focusMode && (
                     <>
                     <ResizablePanel 
                         ref={leftPanelRef}
-                        defaultSize={20} 
-                        minSize={15} 
-                        maxSize={30} 
+                        defaultSize="20" 
+                        minSize="15"
+                        maxSize="30" 
                         collapsible={true}
                         collapsedSize={0}
                         onResize={(size) => {
@@ -425,7 +385,7 @@ export function DashboardShell({
                 )}
 
                 {/* Center: Editor Area */}
-                <ResizablePanel defaultSize={focusMode ? 100 : 60} minSize={40}>
+                <ResizablePanel defaultSize={focusMode ? "100" : "60"} minSize="40">
                     {MainContent}
                 </ResizablePanel>
 
@@ -443,9 +403,9 @@ export function DashboardShell({
                     {/* Right Sidebar: Inspector */}
                     <ResizablePanel 
                         ref={rightPanelRef}
-                        defaultSize={20} 
-                        minSize={15} 
-                        maxSize={35} 
+                        defaultSize="20" 
+                        minSize="15"
+                        maxSize="35" 
                         collapsible={true}
                         collapsedSize={0}
                         onResize={(size) => {
