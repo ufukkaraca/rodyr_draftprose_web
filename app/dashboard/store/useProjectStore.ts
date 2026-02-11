@@ -139,7 +139,7 @@ export const useProjectStore = create<ProjectState>()(
 
       // Targets Initial State
       targets: {
-          projectGoal: 50000,
+          projectGoal: 500, // Demo Target
           sessionGoal: 1000,
           sessionDate: new Date().toISOString().split('T')[0]
       },
